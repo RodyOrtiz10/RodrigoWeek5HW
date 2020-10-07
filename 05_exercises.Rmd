@@ -1,0 +1,427 @@
+---
+title: 'Weekly Exercises #5'
+author: "Rodrigo Ortiz"
+output: 
+  html_document:
+    keep_md: TRUE
+    toc: TRUE
+    toc_float: TRUE
+    df_print: paged
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE, error=TRUE, message=FALSE, warning=FALSE)
+```
+
+```{r libraries}
+library(tidyverse)     # for data cleaning and plotting
+library(googlesheets4) # for reading googlesheet data
+library(lubridate)     # for date manipulation
+library(openintro)     # for the abbr2state() function
+library(palmerpenguins)# for Palmer penguin data
+library(maps)          # for map data
+library(ggmap)         # for mapping points on maps
+library(gplots)        # for col2hex() function
+library(RColorBrewer)  # for color palettes
+library(sf)            # for working with spatial data
+library(leaflet)       # for highly customizable mapping
+library(ggthemes)      # for more themes (including theme_map())
+library(plotly)        # for the ggplotly() - basic interactivity
+library(gganimate)     # for adding animation layers to ggplots
+library(transformr)    # for "tweening" (gganimate)
+library(shiny)         # for creating interactive apps
+gs4_deauth()           # To not have to authorize each time you knit.
+theme_set(theme_minimal())
+library(ggimage)
+library(gifski)
+```
+
+```{r data}
+# SNCF Train data
+small_trains <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-02-26/small_trains.csv") 
+
+# Lisa's garden data
+garden_harvest <- read_sheet("https://docs.google.com/spreadsheets/d/1DekSazCzKqPS2jnGhKue7tLxRU3GVL1oxi-4bEM5IWw/edit?usp=sharing") %>% 
+  mutate(date = ymd(date))
+
+# Lisa's Mallorca cycling data
+mallorca_bike_day7 <- read_csv("https://www.dropbox.com/s/zc6jan4ltmjtvy0/mallorca_bike_day7.csv?dl=1") %>% 
+  select(1:4, speed)
+
+# Heather Lendway's Ironman 70.3 Pan Am championships Panama data
+panama_swim <- read_csv("https://raw.githubusercontent.com/llendway/gps-data/master/data/panama_swim_20160131.csv")
+
+panama_bike <- read_csv("https://raw.githubusercontent.com/llendway/gps-data/master/data/panama_bike_20160131.csv")
+
+panama_run <- read_csv("https://raw.githubusercontent.com/llendway/gps-data/master/data/panama_run_20160131.csv")
+
+#COVID-19 data from the New York Times
+covid19 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv")
+
+
+
+bike_link = "https://raw.githubusercontent.com/llendway/animation_and_interactivity/master/bike.png"
+mallorca_bike_day7<-
+  mallorca_bike_day7 %>% 
+mutate(bike = bike_link)
+
+
+```
+
+  1. Choose 2 graphs you have created for ANY assignment in this class and add interactivity using the `ggplotly()` function.
+  
+
+```{r, eval=FALSE}
+cum_harvest_subset <- garden_harvest %>% 
+  filter(vegetable %in% c("tomatoes")) %>% 
+  group_by(variety, date) %>% 
+  summarize(daily_harvest_lb = sum(weight)*0.00220462) %>% 
+  mutate(cum_harvest_lb = cumsum(daily_harvest_lb))
+
+#cum_harvest_subset
+
+
+cum_harvest_subset %>% 
+  ggplot(aes(x = date, 
+             y = cum_harvest_lb,
+             color = variety)) +
+  geom_line() +
+  geom_text(aes(label=variety))+
+  labs(title = "Tomatoe cumulative harvest (lb) by variety", 
+       subtitle = "Date: {frame_along}",
+       x = "",
+       y = "",
+       color = "variety") +
+  theme(legend.position = "top",
+        legend.title = element_blank()) +
+  transition_reveal(date)
+
+
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("garden_harvest_1.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("garden_harvest_1.gif")
+```
+
+
+For my graph, I created this chart that shows the cumulative harvest weight for all tomato varieties. From the graph we can see which ones are higher than others. With time we see all total harvest weight increase with time. The final harvested weight for majority of varieties is in between 15 and 30 pounds. One thing we noticed is that amish paste had the highest harvested weight. 
+
+
+
+
+```{r}
+garden_harvest %>% 
+  count(date) %>%
+  group_by(date) %>% 
+  summarize(daily_harvest = sum(n)) %>% 
+  mutate(cum_harvest = cumsum(daily_harvest)) %>% 
+  ggplot(aes(x = date, 
+             y = cum_harvest)) +
+  geom_line() +
+  labs(title = "Total Cumulative harvests of Garden in pounds", 
+       subtitle = "Date: {frame_along}",
+       x = "",
+       y = "")  +
+  theme(legend.position = "top",
+        legend.title = element_blank()) +
+  transition_reveal(date)
+
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("garden_harvest_2.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("garden_harvest_2.gif")
+```
+
+This is a basic animation but it shows the overall trend of the total cumulative harvest. We can see that for the most part, the slope of the harvest was relative the same. However, near late July we can see that the slope seems to increase and we had a jump in harvested weight. 
+
+ 2. Use animation to tell an interesting story with the `small_trains` dataset that contains data from the SNCF (National Society of French Railways). These are Tidy Tuesday data! Read more about it [here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-02-26).
+
+```{r}
+small_trains %>% 
+  mutate(Date = ymd(paste(year,month,"01",sep="-"))) %>% 
+  group_by(Date) %>% 
+  mutate(avg_departing_delay = mean(avg_delay_all_departing),
+         avg_arriving_delay = mean(avg_delay_all_arriving)) %>% 
+  ggplot() +
+  geom_line(aes(x = Date, y = avg_departing_delay, color="Departing Delay")) +
+    geom_line(aes(x = Date, y = avg_arriving_delay, color="Arriving Delay")) +
+  labs(title = "Departing vs Arriving Delay", 
+       subtitle = "Date: {frame_along})", 
+       x = "",
+       y = "Hours")  +
+  theme(legend.position = "bottom",
+        legend.title = element_blank()) +
+  transition_reveal(Date)
+
+```
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("train_1.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("train_1.gif")
+```
+
+The graph aboves shows me the trend between arriving and departing delay. For the majority of the graph we can see that when the arriving delay increases we see the departing delay increase. The same is true when one variable falls the other variables falls also. We do see however a gap in between the trends. We can see an average trend difference of about 2-3 hours. 
+
+
+## Garden data
+
+3
+
+```{r, eval=FALSE}
+garden_harvest %>% 
+  filter(vegetable == "tomatoes") %>% 
+  complete(variety, date = seq.Date(min(date), max(date), by = "day")) %>% 
+  select(-c(vegetable, units)) %>% 
+  mutate(weight = replace_na(weight, 0)) %>% 
+  group_by(variety, date) %>% 
+  summarize(daily_harvest_lb = sum(weight)*0.00220462) %>% 
+  mutate(cum_harvest_lb = cumsum(daily_harvest_lb)) %>% 
+  select(-daily_harvest_lb) %>% 
+  ggplot() +
+  geom_area(aes(x = date, 
+                y = cum_harvest_lb,
+                fill = variety),
+                position = position_stack()) +
+  transition_reveal(date) +
+  labs(title = "Cumulative harvest of tomatoes over time in pounds", 
+       x = "",
+       y = "",
+       subtitle = "Moving to {frame_along})") +
+  theme(legend.position = "top",
+        legend.title = element_blank())
+
+```
+
+
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("garden_harvest_3.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("garden_harvest_3.gif")
+```
+
+The graph aboves helps visualize the harvest weight of tomato variety over time. From here we can see that amish paste had the highest total weight. The color scale can make it a bit difficult to differentiate. This is similar to the first problem. 
+
+
+
+## Maps, animation, and movement!
+
+4. Map my `mallorca_bike_day7` bike ride using animation! 
+  
+```{r, eval=FALSE}
+mallorca_map <- get_stamenmap(
+    bbox = c(left = 2.28, bottom = 39.41, right = 3.03, top = 39.8), 
+    maptype = "terrain",
+    zoom = 11)
+
+
+```
+
+
+```{r, eval=false}
+Mallorca_trail_animation<-ggmap(mallorca_map) +
+  geom_image(data = mallorca_bike_day7, 
+             aes(x = lon, y = lat, image=bike_link),
+             size = .1) +
+    geom_path(data = mallorca_bike_day7, 
+             aes(x = lon, y = lat, color=ele),
+             size = .5) +
+  labs(title = "Mallorca Bike Trail", 
+       subtitle = "Time: {frame_along}") +
+  
+  scale_color_viridis_c(option = "magma") +
+  theme_map() +
+  theme(legend.background = element_blank())+
+  transition_reveal(time) +
+  exit_shrink() +
+  enter_recolor(color = "red") +
+  exit_recolor(color = "red")
+
+animate(Mallorca_trail_animation, duration = 10)
+```
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("Mallorca_Trail_1.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("Mallorca_Trail_1.gif")
+``` 
+  
+The graph aboves follows the bike trail and uses a bike image to highlight the current position of the biker. We also added elevation. 
+  
+  
+  
+  
+5 
+
+```{r, eval=FALSE}
+total_trail<-panama_swim %>% 
+  bind_rows(list(panama_run,panama_bike))
+```
+
+```{r, eval=FALSE}
+panama_map <- get_stamenmap(
+    bbox = c(left = -79.56, bottom = 8.88, right = -79.41, top = 9.001), 
+    maptype = "terrain",
+    zoom = 13
+)
+
+ggmap(panama_map) +
+  geom_path(data = total_trail, 
+             aes(x = lon, y = lat, color = event),
+             size = .5) +
+  geom_point(data = total_trail, 
+             aes(x = lon, y = lat, color = event, shape = event),
+             size = 2) +
+
+
+  labs(title = "Panama Trail", 
+       subtitle = "Time: {frame_along}") +
+  
+  scale_color_viridis_d(option = "magma") +
+  theme_map() +
+  theme(legend.background = element_blank())+
+  transition_reveal(time)
+
+#animate(Panama_trail, duration = 10)
+
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("PanamaTrail_1.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("PanamaTrail_1.gif")
+``` 
+Similar to the previous problem, in this graph I mapped the panama trial run, swim, and bike portions of the race. To help make the visualization easier to see, I used color and shape to highlight the current position the person had in the race. Since some parts of the race are used more than once, the shape helps shows the current path.  
+  
+  
+## COVID-19 data
+
+  6. In this exercise, you are going to replicate many of the features in [this](https://aatishb.com/covidtrends/?region=US) visualization by Aitish Bhatia but include all US states. Requirements:
+ * Create a new variable that computes the number of new cases in the past week (HINT: use the `lag()` function you've used in a previous set of exercises). Replace missing values with 0's using `replace_na()`.  
+  * Filter the data to omit rows where the cumulative case counts are less than 20.  
+  * Create a static plot with cumulative cases on the x-axis and new cases in the past 7 days on the x-axis. Connect the points for each state over time. HINTS: use `geom_path()` and add a `group` aesthetic.  Put the x and y axis on the log scale and make the tick labels look nice - `scales::comma` is one option. This plot will look pretty ugly as is.
+  * Animate the plot to reveal the pattern by date. Display the date as the subtitle. Add a leading point to each state's line (`geom_point()`) and add the state name as a label (`geom_text()` - you should look at the `check_overlap` argument).  
+  * Use the `animate()` function to have 200 frames in your animation and make it 30 seconds long. 
+  * Comment on what you observe.
+  
+  
+```{r, eval=FALSE}
+covid19anim<-
+  covid19 %>% 
+  group_by(state) %>% 
+  mutate(lag7 = lag(cases, 7, order_by = date)) %>% 
+  replace_na(list(lag7 = 0)) %>%
+  mutate(past7_cases = cases - lag7) %>% 
+  filter(cases>20) %>% 
+  ggplot(aes(x=cases, y=past7_cases, group=state))+
+  geom_path(color="grey")+
+  geom_point(color="red")+
+  geom_text(aes(label = state), check_overlap = TRUE)+
+  labs(title = "Covid cases by 10000 peopple by state",
+       subtitle = "Date: {frame_along}",
+       x="Total confirmed cases",
+       y="New Confirmed Cases(in the past week)")+
+  scale_x_log10(label = scales::comma)+
+  scale_y_log10(label = scales::comma)+
+  theme(legend.position = "none") +
+  transition_reveal(date) 
+
+
+
+animate(covid19anim,nframes = 200, duration=30)
+
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("CovidCases.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("CovidCases.gif")
+```
+  
+The graph above has alot of things going on so it is hard to individual trends. From the graph as a whole we do see that as total confirimed cases increase, we see that new confirmed cases are also increasing. From the graph we also see that the higher populated states have the highest confirmed cases and most new confirmed cases. There is a strong positive relationship. 
+  
+
+  
+  7. In this exercise you will animate a map of the US, showing how cumulative COVID-19 cases per 10,000 residents has changed over time. This is similar to exercises 11 & 12 from the previous exercises, with the added animation! So, in the end, you should have something like the static map you made there, but animated over all the days. Put date in the subtitle. Comment on what you see.
+
+```{r}
+
+census_pop_est_2018 <- read_csv("https://www.dropbox.com/s/6txwv3b4ng7pepe/us_census_2018_state_pop_est.csv?dl=1") %>% 
+  separate(state, into = c("dot","state"), extra = "merge") %>% 
+  select(-dot) %>% 
+  mutate(state = str_to_lower(state))
+
+
+```
+
+
+```{r}
+covid19_population <-
+  covid19 %>% 
+  mutate(state = str_to_lower(state)) %>%
+  left_join(census_pop_est_2018,
+            by = "state") %>% 
+  group_by(state, est_pop_2018, date) %>%
+  summarize(cumulative_cases = max(cases)) %>%
+  mutate(cases_per_10000 = (cumulative_cases/est_pop_2018)*10000)
+states_map <- map_data("state")
+covid_map <- covid19_population %>% 
+  mutate(state = str_to_lower(state), weekday = wday(date, label=TRUE)) %>%
+  filter(weekday == "Fri") %>%
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state, fill = cases_per_10000, group = date)) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  labs(title = "Cumulative COVID-19 cases per 10,000 people in the United States") +
+  theme(legend.background = element_blank()) + 
+  theme_map() +
+  scale_fill_viridis_c() +
+  transition_states(date, transition_length = 0) +
+  labs(subtitle = "Moving to {next_state}")
+animate(covid_map, duration = 30)
+
+
+
+```
+
+```{r, eval=FALSE, echo=FALSE}
+anim_save("Covidgraph2.gif")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("Covidgraph2.gif")
+```
+The visualization above shows the cases over time. Because we adjust for population we see that upward trend of cases is similar amongst all states. However, for the highest populated states such as texas, california, new york, and florida, we see that they are advanced in cases per 10,000. 
+
+
+## GitHub link
+
+  9. Below, provide a link to your GitHub page with this set of Weekly Exercises. Specifically, if the name of the file is 05_exercises.Rmd, provide a link to the 05_exercises.md file, which is the one that will be most readable on GitHub. If that file isn't very readable, then provide a link to your main GitHub page.
+![https://github.com/RodyOrtiz10/RodrigoWeek5HW]
+
+**DID YOU REMEMBER TO UNCOMMENT THE OPTIONS AT THE TOP?**
